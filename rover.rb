@@ -1,61 +1,79 @@
 class Rover
-  attr_accessor :x, :y, :orientation, :movement_history,
-	        :is_collided, :is_on_plateau, :collision_with
+  attr_accessor :x, :y, :orientation,:is_collided, :is_on_plateau, :collision_with
                 :failed_position
 
   def initialize(x, y, orientation)
-    raise ArgumentError, 'x-coordinate is not an integer' unless x.is_a? Fixnum
-    raise ArgumentError, 'y-coordinate is not an integer' unless y.is_a? Fixnum
-    raise ArgumentError, 'Provided orientation is not a cardinal point' unless ['N','S','E','W'].include? orientation
-
-    @x = x
-    @y = y
+    @x = x.to_i
+    @y = y.to_i
     @orientation = orientation
     @movement_history = []
 
     @is_collided = false
     @is_on_plateau = true
     @collision_with = -1
-    @failed_position = []
+    @failed_position = {'x' => -1, 'y' => -1}
+
+    @take_step = {
+      'N' => [0, 1],
+      'S' => [0, -1],
+      'E' => [1, 0],
+      'W' => [-1, 0],
+    }
   end
 
-  def apply_path(path)
-    raise ArgumentError, 'invalid path descriptor provided' unless /[LRM]+/.match(path)
-    if (@is_collided || !@is_on_plateau)
-      return
-    end
-
-    path_arr = path.split(//)
-    path_arr.map{|movement| getPositionAfterMovement(movement)}
+  def getResult
+    collision_text = " collided with rover #{collision_with}"
+    return "#{@x} #{@y} #{@orientation}#{@is_collided ? collision_text : ''}#{!@is_on_plateau ? 'rover fell off plateau' : ''}"
   end
 
-  def getPositionAfterMovement(movement)
+  def setPosition(pos)
+    @x = pos['x']
+    @y = pos['y']
+  end
+
+  def followPath(movement)
     case movement
       when 'M'
-        moveForward
+        move
       when 'L', 'R'
-	rotate(movement)
+	      rotate(movement)
     end
-    return [@x, @y]
+    return {'x' => @x, 'y' => @y}
   end
 
-  def moveForward
-    case @orientation
-      when 'N'
-        @y += 1
-      when 'S'
-	@y -= 1
-      when 'E'
-	@x += 1
-      when 'W'
-	@x -= 1
-    end
+  private
+
+  def move
+    @x += @take_step[@orientation][0]
+    @y += @take_step[@orientation][1]
   end
 
   def rotate(direction)
-    switch_offset = direction == 'L' ? -1 : 1
-    cardinal_points = ['N', 'E', 'S', 'W']
-    new_orientation_index = (cardinal_points.find_index(@orientation) + switch_offset + 4) % 4
-    @orientation = cardinal_points[new_orientation_index]
+    if (direction == 'L')
+      rotateLeft
+    else
+      rotateRight
+    end
   end
+
+  def rotateRight()
+    rotations = {
+      "N" => "E",
+      "E" => "S",
+      "S" => "W",
+      "W" => "N"
+    }
+    @orientation = rotations[@orientation]
+  end
+
+  def rotateLeft()
+    rotations = {
+      "N" => "W",
+      "W" => "S",
+      "S" => "E",
+      "E" => "N"
+    }
+    @orientation = rotations[@orientation]
+  end
+
 end

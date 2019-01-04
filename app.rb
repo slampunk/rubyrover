@@ -1,11 +1,24 @@
 require './rover.rb'
+require './collisionerror.rb'
+require './suicideerror.rb'
+require './map.rb'
 
 puts "Welcome to the Mars rover challenge"
 puts ""
 puts "You will be asked to provide a map size and (possibly multiple) rover position(s)"
 puts "Enter a pair of integers for the map size"
 map_dimensions = gets
-raise ArgumentError, 'Map dimensions are a tuple of integers' unless /^\d+\s\d+$/.match(map_dimensions)
+raise ArgumentError, 'Map dimensions are either 2 or 4 integers separated by whitespace' unless /^(\d+\s\d+)\s?(\d+\s\d+)?$/.match(map_dimensions)
+mapKeys = ['startX', 'startY', 'width', 'height']
+map_config = map_dimensions.scan(/^(\d+\s\d+)\s?(\d+\s\d+)?$/)
+               .flatten
+               .select { | val | val }
+               .map { | dims | dims.split(/ /) }
+               .flatten
+               .map.with_index { |val, index| [mapKeys[index], val] }.to_h
+
+marsMap = Map.new(map_config)
+
 @roverInputs = []
 
 def getRoverInfo
@@ -37,13 +50,44 @@ def getRoverInfo
   positions = lines.select.with_index { |val, index| index.even? }
                 .map{ | val | val
                    # return a hash of the form {'x'=> .., 'y'=> .., 'orientation'=> ..}
-                   val.split(/ /).map.with_index{ |val, index| [keys[index], val] }.to_h
+                   val.split(/ /).map.with_index{ |val, index| [keys[index], index < 2 ? val.to_i : val] }.to_h
                  }
   #whereas paths are now at odd numbered indices
   paths = lines.select.with_index { |val, index| index.odd? }
   raise LocalJumpError, "the last rover does not have pathing information" if positions.length > paths.length
-  return {positions: positions, paths: paths}
+  return {'positions' => positions, 'paths' => paths}
 end
 
-roverInfo = getRoverInfo
-puts roverInfo[:positions]
+roversInfo = getRoverInfo
+
+rovers = []
+roversInfo['positions'].each { |roverPos|
+  rover = Rover.new(roverPos['x'], roverPos['y'], roverPos['orientation'])
+  rovers.push(rover)
+  marsMap.initialize_rover_position(roverPos)
+}
+
+roversInfo['paths'].each.with_index { |path, index|
+  pathArr = path.split(//)
+  pathArr.each { |step|
+    begin
+      newPos = rovers[index].followPath(step)
+      marsMap.set_rover_position(index, newPos)
+    rescue CollisionError => e
+      rovers[index].setPosition(e.position)
+      rovers[index].is_collided = true
+      rovers[index].collision_with = e.collision_id
+      rovers[e.collision_id].is_collided = true
+      rovers[e.collision_id].collision_with = index
+      break
+    rescue SuicideError => e
+      rovers[index].setPosition(e.position)
+      rovers[index].is_on_plateau = false
+      break
+    end
+  }
+}
+
+rovers.each.with_index { |rover, index|
+  puts "Rover #{index+1}: #{rover.getResult}"
+}
